@@ -5,6 +5,7 @@ require 'socket'
 
 class Interactor
   FLAG_REGEX = /\r?\n([A-z0-9]{64})\r?\n/
+  KNOWN_PLAINTEXT = "A" * 32
   def initialize(local_or_remote)
     case local_or_remote
     when "local"
@@ -35,21 +36,20 @@ class Interactor
     read_until_prompt
 
     # The OTP should now be back in the start position. Provide known plaintext
-    write "A" * 32
+    write KNOWN_PLAINTEXT
     output = read_until_prompt
     known_ciphertext = output.match(FLAG_REGEX)[1]
-
     known_cipherbytes = to_byte_array known_ciphertext
-    known_plaintext = ("A" * 32).split('').map{|chr| chr.ord}
 
+    # Determine the key by XORing the known ciphertext with the known plaintext
+    known_plaintext = KNOWN_PLAINTEXT.split('').map{|chr| chr.ord}
     key = []
     known_plaintext.each_index do |i|
       key << (known_plaintext[i] ^ known_cipherbytes[i])
     end
 
-    # Reverse the encoding by XORing the known cipherbytes against the known plaintext
+    # Use the newly found key to decrypt the flag provided in the beginning
     flag_cipherbytes = to_byte_array flag
-
     decoded_flag = []
     key.each_index do |i|
       decoded_flag << (key[i] ^ flag_cipherbytes[i])
@@ -61,9 +61,10 @@ class Interactor
 
   def to_byte_array(str)
     # .scan(/../) => split the string into an array of 2-character groups
-    # .map{|byte| byte.to_i(16)} => interpret each 2-character group into a hexadecimal number
+    # .map{|byte| byte.to_i(16)} => interpret each 2-character group as a hexadecimal number
     str.scan(/../).map {|byte| byte.to_i(16)}
   end
+
   def read_until_flag
     output = ""
     until match = output.match(FLAG_REGEX)
